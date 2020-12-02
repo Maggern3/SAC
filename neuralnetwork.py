@@ -24,8 +24,8 @@ class NeuralNetwork(nn.Module):
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)        
 
-    def forward(self, x):
-        x = self.convs(x)        
+    def forward(self, state):
+        x = self.convs(state)        
         x = x.view(x.shape[0], -1) #refit x
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -42,9 +42,9 @@ class NeuralNetwork2(nn.Module):
         # uniform init layer 3
 
     def forward(self, state, action):
-        x = self.convs(x)        
+        x = self.convs(state)
         x = x.view(x.shape[0], -1) #refit x
-        x = F.relu(self.fc1(torch.cat(state, action, dim=1)))
+        x = F.relu(self.fc1(torch.cat(x, action, dim=1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
@@ -63,9 +63,9 @@ class NeuralNetwork3(nn.Module):
         # mean, variance, normal distribution
 
     def forward(self, state):
-        x = self.convs(x)        
+        x = self.convs(state)        
         x = x.view(x.shape[0], -1) #refit x
-        x = F.relu(self.fc1(state))
+        x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         mean = self.mean_fc(x)
         log_variance = self.log_variance_fc(x)
@@ -75,7 +75,7 @@ class NeuralNetwork3(nn.Module):
     def sample(self, state, epsilon=1e-6):
         mean, log_variance = self.forward(state)
         variance = log_variance.exp()
-        gaussian = Normal(mean, log_variance)        
+        gaussian = Normal(mean, variance)        
         z = gaussian.rsample()
         
         log_pi = (gaussian.log_prob(z) - torch.log(1 - (torch.tanh(z)).pow(2) + epsilon)).sum(1, keepdim=True)
