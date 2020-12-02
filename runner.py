@@ -32,10 +32,12 @@ for steps in range(1000):
 import torch
 import torch.functional as F
 import torch.optim as optim
+
 actor_optim = optim.Adam(actor.parameters())
 v_optim = optim.Adam(critic_v.parameters())
 q1_optim = optim.Adam(critic_v.parameters())
 q2_optim = optim.Adam(critic_v.parameters())
+
 def train(self):
     gamma = 0.99
     state, actions, reward, next_state, dones = replayBuffer[0]
@@ -63,9 +65,12 @@ def train(self):
     q2_loss.backward()
     q2_optim.step()
 
-    
-    # actor_loss = torch.log(actor(state)) + (torch.log(actor(state))-critic_q_1(state, actions)) * f # reparameterization
-    # actor_loss.backward()
-    # actor_optim.step()
+    policy_actions = torch.tanh(z)
+    q1 = critic_q_1(state, policy_actions)
+    q2 = critic_q_2(state, policy_actions)
+    actor_loss = (log_pi - min(q1, q2)).mean()
+    actor_optim.zero_grad()
+    actor_loss.backward()
+    actor_optim.step()
 #actor_optim.zero_grad()
 #update target network
