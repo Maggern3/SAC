@@ -5,18 +5,18 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
 import torchvision.transforms.functional as TF
-from neuralnetwork import NeuralNetwork, NeuralNetwork2, NeuralNetwork3, ConvClass
+from neuralnetwork import NeuralNetwork, NeuralNetwork2, NeuralNetwork3, ConvNetwork
 from buffer import ReplayBuffer
 
 class SoftActorCriticAgent():
     def __init__(self):        
         torch.autograd.set_detect_anomaly(True)
-        self.conv = ConvClass()
-        self.critic_v = NeuralNetwork(self.conv)
-        self.critic_v_target = NeuralNetwork(self.conv)
-        self.critic_q_1 = NeuralNetwork2(self.conv)
-        self.critic_q_2 = NeuralNetwork2(self.conv)
-        self.actor = NeuralNetwork3(self.conv)
+        self.conv_net = ConvNetwork()
+        self.critic_v = NeuralNetwork()
+        self.critic_v_target = NeuralNetwork()
+        self.critic_q_1 = NeuralNetwork2()
+        self.critic_q_2 = NeuralNetwork2()
+        self.actor = NeuralNetwork3()
         self.actor_optim = optim.Adam(self.actor.parameters())
         self.v_optim = optim.Adam(self.critic_v.parameters())
         self.q1_optim = optim.Adam(self.critic_q_1.parameters())
@@ -29,8 +29,10 @@ class SoftActorCriticAgent():
 
     def select_actions(self, state):    
         self.actor.eval()
+        self.conv_net.eval()
         with torch.no_grad():    
-            mean, log_variance = self.actor.forward(state.unsqueeze(0))
+            state = self.conv_net(state.unsqueeze(0))
+            mean, log_variance = self.actor.forward(state)
             variance = log_variance.exp()
             gaussian = Normal(mean, variance)        
             z = gaussian.sample()
@@ -50,12 +52,16 @@ class SoftActorCriticAgent():
             action4 = torch.argmax(dim4_p)
             actions = [action1.item(), action2.item(), action3.item(), action4.item()]
         self.actor.train()
+        self.conv_net.train()
         return numpy.array(actions)
 
     def train(self):   
         if(len(self.replay_buffer.replay_buffer) < self.batch_size):  
             return  
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
+
+        states = self.conv_net(states)
+        next_states = self.conv_net(next_states)
 
         current_critic_v = self.critic_v(states)
         mean, variance, z, log_pi = self.actor.sample(states)
@@ -67,17 +73,19 @@ class SoftActorCriticAgent():
 
         # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
         target_q = rewards + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
-        #current_q_1 = self.critic_q_1.forward(states, actions)
-        #current_q_2 = self.critic_q_2.forward(states, actions)
-        q1_loss = F.mse_loss(q1, target_q.detach()) 
-        q2_loss = F.mse_loss(q2, target_q.detach())
+        current_q_1 = self.critic_q_1(states, actions)
+        current_q_2 = self.critic_q_2(states, actions)
+        q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
+        q2_loss = F.mse_loss(current_q_2, target_q.detach())
 
         self.v_optim.zero_grad()
         critic_loss.backward()
         self.v_optim.step()
+
         self.q1_optim.zero_grad()
         q1_loss.backward()
-        self.q1_optim.step()        
+        self.q1_optim.step()    
+
         self.q2_optim.zero_grad()
         q2_loss.backward()
         self.q2_optim.step()
