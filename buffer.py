@@ -12,7 +12,7 @@ class ReplayBuffer():
         samples = random.sample(self.replay_buffer, k=self.batch_size)    
          
         states = torch.stack([s[0] for s in samples])
-        actions = torch.tensor([s[1] for s in samples]).float().to(self.device)
+        actions = torch.stack([s[1] for s in samples]).float().to(self.device)
         rewards = torch.tensor([s[2] for s in samples]).float().unsqueeze(1).to(self.device)
         next_states = torch.stack([s[3] for s in samples])
         dones = torch.tensor([s[4] for s in samples]).float().unsqueeze(1).to(self.device)

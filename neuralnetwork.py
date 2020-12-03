@@ -22,7 +22,7 @@ class ConvNetwork(nn.Module):
         x = x.view(x.shape[0], -1) #refit x
         return x
 
-class NeuralNetwork(nn.Module):
+class StateValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
         self.fc1 = nn.Linear(convoutputsize, 128)
@@ -35,21 +35,22 @@ class NeuralNetwork(nn.Module):
         x = self.fc3(x)
         return x
 
-class NeuralNetwork2(nn.Module):
+class ActionValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convoutputsize+4, 128)
+        self.fc1 = nn.Linear(convoutputsize+11, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
         # uniform init layer 3
 
     def forward(self, state, action):
+        print(action.shape)
         x = F.relu(self.fc1(torch.cat((state, action), dim=1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
 
-class NeuralNetwork3(nn.Module):
+class PolicyNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
         self.fc1 = nn.Linear(convoutputsize, 128)

@@ -17,8 +17,9 @@ state = TF.to_tensor(state)
 print(state.size)
 #for episode in range(10):
 for steps in range(1000):
-    actions = agent.select_actions(state)
-    next_state, reward, done, info = env.step(actions)
+    actions, actions_env_format = agent.select_actions(state)
+    print('rnr21', actions.shape, actions_env_format.shape)
+    next_state, reward, done, info = env.step(actions_env_format)
     next_state = next_state[0]
     next_state = TF.to_tensor(next_state)
     agent.replay_buffer.add((state, actions, reward, next_state, done))    

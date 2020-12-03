@@ -5,18 +5,18 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
 import torchvision.transforms.functional as TF
-from neuralnetwork import NeuralNetwork, NeuralNetwork2, NeuralNetwork3, ConvNetwork
+from neuralnetwork import StateValueNetwork, ActionValueNetwork, PolicyNetwork, ConvNetwork
 from buffer import ReplayBuffer
 
 class SoftActorCriticAgent():
     def __init__(self):        
         torch.autograd.set_detect_anomaly(True)
         self.conv_net = ConvNetwork()
-        self.critic_v = NeuralNetwork()
-        self.critic_v_target = NeuralNetwork()
-        self.critic_q_1 = NeuralNetwork2()
-        self.critic_q_2 = NeuralNetwork2()
-        self.actor = NeuralNetwork3()
+        self.critic_v = StateValueNetwork()
+        self.critic_v_target = StateValueNetwork()
+        self.critic_q_1 = ActionValueNetwork()
+        self.critic_q_2 = ActionValueNetwork()
+        self.actor = PolicyNetwork()
         self.actor_optim = optim.Adam(self.actor.parameters())
         self.v_optim = optim.Adam(self.critic_v.parameters())
         self.q1_optim = optim.Adam(self.critic_q_1.parameters())
@@ -50,10 +50,10 @@ class SoftActorCriticAgent():
             dim4 = actions[8:11]
             dim4_p = F.softmax(dim4, 0)
             action4 = torch.argmax(dim4_p)
-            actions = [action1.item(), action2.item(), action3.item(), action4.item()]
+            actions_env_format = [action1.item(), action2.item(), action3.item(), action4.item()]
         self.actor.train()
         self.conv_net.train()
-        return numpy.array(actions)
+        return actions, numpy.array(actions_env_format)
 
     def train(self):   
         if(len(self.replay_buffer.replay_buffer) < self.batch_size):  
@@ -62,13 +62,17 @@ class SoftActorCriticAgent():
 
         states = self.conv_net(states)
         next_states = self.conv_net(next_states)
+        mean, variance, z, log_pi = self.actor.sample(states)
+        print(z.shape)
+        policy_actions = torch.tanh(z)
+        print(policy_actions.shape)
+        q1 = self.critic_q_1(states, policy_actions)
+        q2 = self.critic_q_2(states, policy_actions)
+        predicted_new_q = torch.min(q1, q2)
 
         current_critic_v = self.critic_v(states)
-        mean, variance, z, log_pi = self.actor.sample(states)
-        q1 = self.critic_q_1(states, actions)
-        q2 = self.critic_q_2(states, actions)
         # Eat∼πφ[Qθ(st,at)−logπφ(at|st)]
-        target_critic_v = torch.min(q1, q2) - log_pi
+        target_critic_v = predicted_new_q - log_pi
         critic_loss = F.mse_loss(current_critic_v, target_critic_v.detach())
 
         # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
@@ -90,10 +94,7 @@ class SoftActorCriticAgent():
         q2_loss.backward()
         self.q2_optim.step()
 
-        policy_actions = torch.tanh(z)
-        q1 = self.critic_q_1(states, policy_actions)
-        q2 = self.critic_q_2(states, policy_actions)
-        actor_loss = (log_pi - min(q1, q2)).mean()
+        actor_loss = (log_pi - predicted_new_q).mean()
         self.actor_optim.zero_grad()
         actor_loss.backward()
         self.actor_optim.step()
