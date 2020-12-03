@@ -60,45 +60,42 @@ class SoftActorCriticAgent():
             return  
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
 
-        states = self.conv_net(states)
-        next_states = self.conv_net(next_states)
+        states = self.conv_net(states).detach()
+        next_states = self.conv_net(next_states).detach()
+
+        current_q_1 = self.critic_q_1(states, actions)
+        current_q_2 = self.critic_q_2(states, actions)
+        current_critic_v = self.critic_v(states)
         mean, variance, z, log_pi = self.actor.sample(states)
-        print(z.shape)
         policy_actions = torch.tanh(z)
-        print(policy_actions.shape)
+
+        # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
+        target_q = rewards + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
+        q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
+        q2_loss = F.mse_loss(current_q_2, target_q.detach())
+        self.q1_optim.zero_grad()
+        q1_loss.backward()
+        self.q1_optim.step()
+        self.q2_optim.zero_grad()
+        q2_loss.backward()
+        self.q2_optim.step()
+
         q1 = self.critic_q_1(states, policy_actions)
         q2 = self.critic_q_2(states, policy_actions)
         predicted_new_q = torch.min(q1, q2)
 
-        current_critic_v = self.critic_v(states)
         # Eat∼πφ[Qθ(st,at)−logπφ(at|st)]
         target_critic_v = predicted_new_q - log_pi
         critic_loss = F.mse_loss(current_critic_v, target_critic_v.detach())
-
-        # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
-        target_q = rewards + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
-        current_q_1 = self.critic_q_1(states, actions)
-        current_q_2 = self.critic_q_2(states, actions)
-        q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
-        q2_loss = F.mse_loss(current_q_2, target_q.detach())
-
         self.v_optim.zero_grad()
         critic_loss.backward()
         self.v_optim.step()
-
-        self.q1_optim.zero_grad()
-        q1_loss.backward()
-        self.q1_optim.step()    
-
-        self.q2_optim.zero_grad()
-        q2_loss.backward()
-        self.q2_optim.step()
 
         actor_loss = (log_pi - predicted_new_q).mean()
         self.actor_optim.zero_grad()
         actor_loss.backward()
         self.actor_optim.step()
-        update_target(self.tau)
+        self.update_target(self.tau)
 
     def update_target(self, tau):
         for target_param, param in zip(self.critic_v_target.parameters(), self.critic_v.parameters()):

@@ -74,7 +74,7 @@ class PolicyNetwork(nn.Module):
         mean, log_variance = self.forward(state)
         variance = log_variance.exp()
         gaussian = Normal(mean, variance)        
-        z = gaussian.rsample()
+        z = gaussian.sample()
         
         log_pi = (gaussian.log_prob(z) - torch.log(1 - (torch.tanh(z)).pow(2) + epsilon)).sum(1, keepdim=True)
         return mean, variance, z, log_pi
