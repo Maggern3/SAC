@@ -3,7 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-convoutputsize = 8192
+convnetworkoutputsize = 256
+convoutputsize = 8192 
 
 class ConvNetwork(nn.Module):
     def __init__(self):    
@@ -12,6 +13,10 @@ class ConvNetwork(nn.Module):
         self.conv2 = nn.Conv2d(32, 64, 3)
         self.conv3 = nn.Conv2d(64, 128, 3)
         #self.conv4 = nn.Conv2d(128, 128, 3)
+        #self.conv5 = nn.Conv2d(128, 128, 3)
+        self.fc1 = nn.Linear(convoutputsize, 256)
+        self.fc2 = nn.Linear(256, 256)
+        self.fc3 = nn.Linear(256, convnetworkoutputsize)
         self.pool = nn.MaxPool2d(2, 2)
 
     def forward(self, state):
@@ -20,12 +25,15 @@ class ConvNetwork(nn.Module):
         x = self.pool(F.relu(self.conv3(x)))
         #x = self.conv4(x)
         x = x.view(x.shape[0], -1) #refit x
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
         return x
 
 class StateValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convoutputsize, 128)
+        self.fc1 = nn.Linear(convnetworkoutputsize, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)        
 
@@ -38,13 +46,12 @@ class StateValueNetwork(nn.Module):
 class ActionValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convoutputsize+11, 128)
+        self.fc1 = nn.Linear(convnetworkoutputsize+11, 128)
         self.fc2 = nn.Linear(128, 64)
         self.fc3 = nn.Linear(64, 1)
         # uniform init layer 3
 
     def forward(self, state, action):
-        print(action.shape)
         x = F.relu(self.fc1(torch.cat((state, action), dim=1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -53,7 +60,7 @@ class ActionValueNetwork(nn.Module):
 class PolicyNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convoutputsize, 128)
+        self.fc1 = nn.Linear(convnetworkoutputsize, 128)
         self.fc2 = nn.Linear(128, 64)
 
         self.mean_fc = nn.Linear(64, 11)

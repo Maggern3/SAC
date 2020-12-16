@@ -17,13 +17,14 @@ class SoftActorCriticAgent():
         self.critic_q_1 = ActionValueNetwork()
         self.critic_q_2 = ActionValueNetwork()
         self.actor = PolicyNetwork()
-        self.actor_optim = optim.Adam(self.actor.parameters())
-        self.v_optim = optim.Adam(self.critic_v.parameters())
-        self.q1_optim = optim.Adam(self.critic_q_1.parameters())
-        self.q2_optim = optim.Adam(self.critic_q_2.parameters())        
+        self.actor_optim = optim.Adam(self.actor.parameters(), lr=3*10e-4) #0.003
+        self.v_optim = optim.Adam(self.critic_v.parameters(), lr=0.003)
+        self.q1_optim = optim.Adam(self.critic_q_1.parameters(), lr=0.003)
+        self.q2_optim = optim.Adam(self.critic_q_2.parameters(), lr=0.003)        
         self.gamma = 0.99
         self.tau = 0.005
         self.batch_size = 16 #256
+        self.reward_scale = 10
         self.replay_buffer = ReplayBuffer(self.batch_size)
         self.update_target(1)
 
@@ -70,7 +71,7 @@ class SoftActorCriticAgent():
         policy_actions = torch.tanh(z)
 
         # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
-        target_q = rewards + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
+        target_q = rewards * self.reward_scale + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
         q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
         q2_loss = F.mse_loss(current_q_2, target_q.detach())
         self.q1_optim.zero_grad()
