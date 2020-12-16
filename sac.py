@@ -1,5 +1,6 @@
 import torch
 import numpy
+from torch._C import device
 # import torch.functional as F
 import torch.nn.functional as F
 import torch.optim as optim
@@ -10,29 +11,38 @@ from buffer import ReplayBuffer
 
 class SoftActorCriticAgent():
     def __init__(self):        
-        torch.autograd.set_detect_anomaly(True)
-        self.conv_net = ConvNetwork()
-        self.critic_v = StateValueNetwork()
-        self.critic_v_target = StateValueNetwork()
-        self.critic_q_1 = ActionValueNetwork()
-        self.critic_q_2 = ActionValueNetwork()
-        self.actor = PolicyNetwork()
+        #torch.autograd.set_detect_anomaly(True)
+        gpu = torch.cuda.is_available()
+        if(gpu):
+            print('GPU/CUDA works! Happy fast training :)')
+            torch.cuda.current_device()
+            torch.cuda.empty_cache()
+            self.device = torch.device("cuda")
+        else:
+            print('training on cpu...')
+            self.device = torch.device("cpu")
+        self.conv_net = ConvNetwork().to(self.device)
+        self.critic_v = StateValueNetwork().to(self.device)
+        self.critic_v_target = StateValueNetwork().to(self.device)
+        self.critic_q_1 = ActionValueNetwork().to(self.device)
+        self.critic_q_2 = ActionValueNetwork().to(self.device)
+        self.actor = PolicyNetwork().to(self.device)
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=3*10e-4) #0.003
         self.v_optim = optim.Adam(self.critic_v.parameters(), lr=0.003)
         self.q1_optim = optim.Adam(self.critic_q_1.parameters(), lr=0.003)
         self.q2_optim = optim.Adam(self.critic_q_2.parameters(), lr=0.003)        
         self.gamma = 0.99
         self.tau = 0.005
-        self.batch_size = 16 #256
+        self.batch_size = 32 #256
         self.reward_scale = 10
-        self.replay_buffer = ReplayBuffer(self.batch_size)
+        self.replay_buffer = ReplayBuffer(self.batch_size, self.device)
         self.update_target(1)
 
     def select_actions(self, state):    
         self.actor.eval()
         self.conv_net.eval()
         with torch.no_grad():    
-            state = self.conv_net(state.unsqueeze(0))
+            state = self.conv_net(state.unsqueeze(0).to(self.device))
             mean, log_variance = self.actor.forward(state)
             variance = log_variance.exp()
             gaussian = Normal(mean, variance)        

@@ -6,6 +6,7 @@ from sac import SoftActorCriticAgent
 import torchvision.transforms.functional as TF
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 
 env = ObstacleTowerEnv(retro=False, realtime_mode=False)
 print(env.action_space)
@@ -14,14 +15,14 @@ print(env.observation_space)
 agent = SoftActorCriticAgent()
 
 state = env.reset()
-#print(state.shape)
 state = state[0]
 state = TF.to_tensor(state)
 print(state.size)
 scores = []
 mean_scores_100 = deque(maxlen=100)
-version = 'v3'
+version = 'v7'
 for episode in range(400):
+    start = time.time()
     timesteps = 0
     rewards = 0
     for steps in range(10000):
@@ -38,7 +39,7 @@ for episode in range(400):
             break
     scores.append(rewards)
     mean_scores_100.append(rewards)
-    print('episode {} frames {} rewards {:.2f} mean score {:.2f}'.format(episode, timesteps, rewards, np.mean(mean_scores_100)))
+    print('episode {} frames {} rewards {:.2f} mean score {:.2f} elapsed {:.2f}sec'.format(episode, timesteps, rewards, np.mean(mean_scores_100), time.time()-start))
     if(episode % 100 == 0):
         torch.save(agent.conv_net.state_dict(), 'checkpoints/conv_net_checkpoint_{}.pth'.format(version))
         torch.save(agent.critic_v.state_dict(), 'checkpoints/critic_v_checkpoint_{}.pth'.format(version))
@@ -54,23 +55,17 @@ plt.xlabel('Episode #')
 plt.savefig('results/{}_scores.png'.format(version))
 
 # todos:
-# run on openai gym Mountaincar or cartpole to test implementation
-# 2 hidden layers, 256 units
-# build testrunner.py
-# up batch size, paper 256
-# up buffer 10^6
-# timer
-# tweak tests reward scale 5, 20
-# set up pc3?
-# reduce size of convnetwork, more conv layers
-# more pooling
-# add support to run on gpu(device)
+# run on openai gym Mountaincar or cartpole to test implementation, not based on pixels
+
 # upgrade implementation to 2019 paper
+# up batch size, paper 256
+# stacked states(to capture movement)?
+# train longer? 1m-10m frames aka 1k-10k episodes?
+
+# set up pc3?
 # store compressed states(run through convnetwork)
 # dropout on convnetwork, batchnorm
-# stacked states(to capture movement)?
 # seed?
-# train longer? 1m-10m frames aka 1k-10k episodes?
 # reduce training steps?
 
 # v1 canonical (pc1)
@@ -89,3 +84,4 @@ plt.savefig('results/{}_scores.png'.format(version))
 
 # v6 fc layers in convnetwork, lr, reward scaling * 10 (pc1)
 
+# v7 v6 + reduced nn layers, uniform weights and bias init, increase batch & buffer size (pc1)
