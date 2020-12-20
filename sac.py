@@ -21,7 +21,6 @@ class SoftActorCriticAgent():
         else:
             print('training on cpu...')
             self.device = torch.device("cpu")
-        self.conv_net = ConvNetwork().to(self.device)
         self.critic_v = StateValueNetwork().to(self.device)
         self.critic_v_target = StateValueNetwork().to(self.device)
         self.critic_q_1 = ActionValueNetwork().to(self.device)
@@ -33,17 +32,15 @@ class SoftActorCriticAgent():
         self.q2_optim = optim.Adam(self.critic_q_2.parameters(), lr=0.003)        
         self.gamma = 0.99
         self.tau = 0.005
-        self.batch_size = 32 #256
+        self.batch_size = 256
         self.reward_scale = 10
         self.replay_buffer = ReplayBuffer(self.batch_size, self.device)
         self.update_target(1)
 
     def select_actions(self, state):    
         self.actor.eval()
-        self.conv_net.eval()
         with torch.no_grad():    
-            state = self.conv_net(state.unsqueeze(0).to(self.device))
-            mean, log_variance = self.actor.forward(state)
+            mean, log_variance = self.actor.forward(state.unsqueeze(0).to(self.device))
             variance = log_variance.exp()
             gaussian = Normal(mean, variance)        
             z = gaussian.sample()
@@ -63,16 +60,12 @@ class SoftActorCriticAgent():
             action4 = torch.argmax(dim4_p)
             actions_env_format = [action1.item(), action2.item(), action3.item(), action4.item()]
         self.actor.train()
-        self.conv_net.train()
         return actions, numpy.array(actions_env_format)
 
     def train(self):   
         if(len(self.replay_buffer.replay_buffer) < self.batch_size):  
             return  
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
-
-        states = self.conv_net(states).detach()
-        next_states = self.conv_net(next_states).detach()
 
         current_q_1 = self.critic_q_1(states, actions)
         current_q_2 = self.critic_q_2(states, actions)

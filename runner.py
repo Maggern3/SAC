@@ -20,7 +20,7 @@ state = TF.to_tensor(state)
 print(state.size)
 scores = []
 mean_scores_100 = deque(maxlen=100)
-version = 'v7'
+version = 'v11'
 for episode in range(400):
     start = time.time()
     timesteps = 0
@@ -40,8 +40,7 @@ for episode in range(400):
     scores.append(rewards)
     mean_scores_100.append(rewards)
     print('episode {} frames {} rewards {:.2f} mean score {:.2f} elapsed {:.2f}sec'.format(episode, timesteps, rewards, np.mean(mean_scores_100), time.time()-start))
-    if(episode % 100 == 0):
-        torch.save(agent.conv_net.state_dict(), 'checkpoints/conv_net_checkpoint_{}.pth'.format(version))
+    if(episode % 20 == 0):
         torch.save(agent.critic_v.state_dict(), 'checkpoints/critic_v_checkpoint_{}.pth'.format(version))
         torch.save(agent.critic_q_1.state_dict(), 'checkpoints/critic_q_1_checkpoint_{}.pth'.format(version))
         torch.save(agent.critic_q_2.state_dict(), 'checkpoints/critic_q_2_checkpoint_{}.pth'.format(version))
@@ -55,18 +54,16 @@ plt.xlabel('Episode #')
 plt.savefig('results/{}_scores.png'.format(version))
 
 # todos:
-# run on openai gym Mountaincar or cartpole to test implementation, not based on pixels
-
 # upgrade implementation to 2019 paper
-# up batch size, paper 256
 # stacked states(to capture movement)?
 # train longer? 1m-10m frames aka 1k-10k episodes?
 
-# set up pc3?
-# store compressed states(run through convnetwork)
+# set up pc3? stronger gpu
+
 # dropout on convnetwork, batchnorm
 # seed?
 # reduce training steps?
+# prioritized experience replay?
 
 # v1 canonical (pc1)
 # episode 99 frames 600 rewards 0.00 mean score(100ep) 0.25
@@ -84,4 +81,8 @@ plt.savefig('results/{}_scores.png'.format(version))
 
 # v6 fc layers in convnetwork, lr, reward scaling * 10 (pc1)
 
-# v7 v6 + reduced nn layers, uniform weights and bias init, increase batch & buffer size (pc1)
+# v8 v6 + reduced nn layers, uniform weights and bias init, increase batch & buffer size (pc1)
+
+# v9 v8 + random seed set
+
+# v11 removed seed, one CNN for each, remove detaching

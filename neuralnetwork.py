@@ -3,7 +3,6 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.distributions import Normal
 
-convnetworkoutputsize = 256
 convoutputsize = 1296 
 initial_weight = 3e-3
 
@@ -16,8 +15,6 @@ class ConvNetwork(nn.Module):
         self.conv2 = nn.Conv2d(4, 16, 3, stride=1, padding=0)
         # 19x19x32, pool 9x9x16
         #self.conv3 = nn.Conv2d(32, 32, 3)
-        self.fc1 = nn.Linear(convoutputsize, 256)
-        self.fc2 = nn.Linear(256, convnetworkoutputsize)
         self.pool = nn.MaxPool2d(2, 2)
 
     def forward(self, state):
@@ -25,19 +22,19 @@ class ConvNetwork(nn.Module):
         x = self.pool(F.relu(self.conv2(x)))
         #print(x.shape)
         x = x.view(x.shape[0], -1) #refit x
-        x = F.relu(self.fc1(x))
-        x = self.fc2(x)
         return x
 
 class StateValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convnetworkoutputsize, 256)
+        self.conv_net = ConvNetwork()#.to(self.device)
+        self.fc1 = nn.Linear(convoutputsize, 256)
         self.fc2 = nn.Linear(256, 1)
         #self.fc3 = nn.Linear(64, 1)        
 
     def forward(self, state):
-        x = F.relu(self.fc1(state))
+        x = self.conv_net(state)        
+        x = F.relu(self.fc1(x))
         x = self.fc2(x)
         #x = self.fc3(x)
         return x
@@ -45,7 +42,8 @@ class StateValueNetwork(nn.Module):
 class ActionValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convnetworkoutputsize+11, 256)
+        self.conv_net = ConvNetwork()#.to(self.device)
+        self.fc1 = nn.Linear(convoutputsize+11, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
         # uniform init layer 3
@@ -53,7 +51,8 @@ class ActionValueNetwork(nn.Module):
         self.fc3.bias.data.uniform_(-initial_weight, initial_weight)
 
     def forward(self, state, action):
-        x = F.relu(self.fc1(torch.cat((state, action), dim=1)))
+        x = self.conv_net(state)
+        x = F.relu(self.fc1(torch.cat((x, action), dim=1)))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
@@ -61,7 +60,8 @@ class ActionValueNetwork(nn.Module):
 class PolicyNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
-        self.fc1 = nn.Linear(convnetworkoutputsize, 256)
+        self.conv_net = ConvNetwork()#.to(self.device)
+        self.fc1 = nn.Linear(convoutputsize, 256)
         self.fc2 = nn.Linear(256, 256)
 
         self.mean_fc = nn.Linear(256, 11)
@@ -73,7 +73,8 @@ class PolicyNetwork(nn.Module):
         # mean, variance, normal distribution
 
     def forward(self, state):
-        x = F.relu(self.fc1(state))
+        x = self.conv_net(state)
+        x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         mean = self.mean_fc(x)
         log_variance = self.log_variance_fc(x)

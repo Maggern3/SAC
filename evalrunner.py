@@ -20,8 +20,7 @@ state = TF.to_tensor(state)
 print(state.size)
 scores = []
 mean_scores_100 = deque(maxlen=100)
-version = 'v3'
-agent.conv_net.load_state_dict(torch.load('checkpoints/conv_net_checkpoint_{}.pth'.format(version)))
+version = 'v11'
 agent.critic_v.load_state_dict(torch.load('checkpoints/critic_v_checkpoint_{}.pth'.format(version)))
 agent.critic_q_1.load_state_dict(torch.load('checkpoints/critic_q_1_checkpoint_{}.pth'.format(version)))
 agent.critic_q_2.load_state_dict(torch.load('checkpoints/critic_q_2_checkpoint_{}.pth'.format(version)))
