@@ -57,11 +57,11 @@ plt.savefig('results/{}_scores.png'.format(version))
 # upgrade implementation to 2019 paper
 # stacked states(to capture movement)?
 # train longer? 1m-10m frames aka 1k-10k episodes?
+# seed?
 
 # set up pc3? stronger gpu
 
 # dropout on convnetwork, batchnorm
-# seed?
 # reduce training steps?
 # prioritized experience replay?
 

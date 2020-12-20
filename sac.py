@@ -21,13 +21,12 @@ class SoftActorCriticAgent():
         else:
             print('training on cpu...')
             self.device = torch.device("cpu")
-        self.critic_v = StateValueNetwork().to(self.device)
-        self.critic_v_target = StateValueNetwork().to(self.device)
         self.critic_q_1 = ActionValueNetwork().to(self.device)
+        self.critic_q_1_target = ActionValueNetwork().to(self.device)
         self.critic_q_2 = ActionValueNetwork().to(self.device)
+        self.critic_q_2_target = ActionValueNetwork().to(self.device)
         self.actor = PolicyNetwork().to(self.device)
         self.actor_optim = optim.Adam(self.actor.parameters(), lr=3*10e-4) #0.003
-        self.v_optim = optim.Adam(self.critic_v.parameters(), lr=0.003)
         self.q1_optim = optim.Adam(self.critic_q_1.parameters(), lr=0.003)
         self.q2_optim = optim.Adam(self.critic_q_2.parameters(), lr=0.003)        
         self.gamma = 0.99
@@ -69,12 +68,13 @@ class SoftActorCriticAgent():
 
         current_q_1 = self.critic_q_1(states, actions)
         current_q_2 = self.critic_q_2(states, actions)
-        current_critic_v = self.critic_v(states)
-        mean, variance, z, log_pi = self.actor.sample(states)
-        policy_actions = torch.tanh(z)
+        
 
-        # r(st,at) +γEst+1∼p[V ̄ψ(st+1)],
-        target_q = rewards * self.reward_scale + (self.gamma * self.critic_v_target(next_states) * (1-dones)) 
+        next_mean, next_variance, next_z, next_log_pi = self.actor.sample(next_states)
+        next_policy_actions = torch.tanh(next_z)
+        next_q = min(self.critic_q_1_target(next_states, next_policy_actions), self.critic_q_2_target(next_states, next_policy_actions))
+        next_q = next_q - self.alpha * next_log_pi
+        target_q = rewards * self.reward_scale + (self.gamma * next_q * (1-dones)) 
         q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
         q2_loss = F.mse_loss(current_q_2, target_q.detach())
         self.q1_optim.zero_grad()
@@ -84,23 +84,20 @@ class SoftActorCriticAgent():
         q2_loss.backward()
         self.q2_optim.step()
 
+        mean, variance, z, log_prob = self.actor.sample(states)
+        policy_actions = torch.tanh(z)
         q1 = self.critic_q_1(states, policy_actions)
         q2 = self.critic_q_2(states, policy_actions)
         predicted_new_q = torch.min(q1, q2)
 
-        # Eat∼πφ[Qθ(st,at)−logπφ(at|st)]
-        target_critic_v = predicted_new_q - log_pi
-        critic_loss = F.mse_loss(current_critic_v, target_critic_v.detach())
-        self.v_optim.zero_grad()
-        critic_loss.backward()
-        self.v_optim.step()
-
-        actor_loss = (log_pi - predicted_new_q).mean()
+        actor_loss = (self.alpha * log_prob - predicted_new_q).mean()
         self.actor_optim.zero_grad()
         actor_loss.backward()
         self.actor_optim.step()
         self.update_target(self.tau)
 
     def update_target(self, tau):
-        for target_param, param in zip(self.critic_v_target.parameters(), self.critic_v.parameters()):
+        for target_param, param in zip(self.critic_q_1_target.parameters(), self.critic_q_1.parameters()):
+            target_param.data.copy_(tau * param.data + (1-tau) * target_param.data)
+        for target_param, param in zip(self.critic_q_2_target.parameters(), self.critic_q_2.parameters()):
             target_param.data.copy_(tau * param.data + (1-tau) * target_param.data)
