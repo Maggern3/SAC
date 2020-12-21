@@ -4,7 +4,7 @@ from collections import deque
 
 class ReplayBuffer():
     def __init__(self, batch_size, device):
-        self.replay_buffer = deque(maxlen=1000000)
+        self.replay_buffer = deque(maxlen=100000)
         self.batch_size = batch_size
         self.device = device
 

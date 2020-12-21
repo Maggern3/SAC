@@ -6,12 +6,12 @@ import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
 import torchvision.transforms.functional as TF
-from neuralnetwork import StateValueNetwork, ActionValueNetwork, PolicyNetwork, ConvNetwork
+from neuralnetwork import ActionValueNetwork, PolicyNetwork, ConvNetwork
 from buffer import ReplayBuffer
 
 class SoftActorCriticAgent():
-    def __init__(self):        
-        #torch.autograd.set_detect_anomaly(True)
+    def __init__(self, action_space):        
+        torch.autograd.set_detect_anomaly(True)
         gpu = torch.cuda.is_available()
         if(gpu):
             print('GPU/CUDA works! Happy fast training :)')
@@ -32,8 +32,13 @@ class SoftActorCriticAgent():
         self.gamma = 0.99
         self.tau = 0.005
         self.batch_size = 256
-        self.reward_scale = 10
+        self.reward_scale = 1
         self.replay_buffer = ReplayBuffer(self.batch_size, self.device)
+        self.expected_entropy = -torch.prod(torch.tensor(action_space.shape).to(self.device)).item() # unsure if this is right for multidiscrete env
+        print(self.expected_entropy)
+        self.log_alpha = torch.tensor(0.0, requires_grad=True, device=self.device)
+        self.alpha_optimizer = optim.Adam([self.log_alpha], lr=0.003)
+        self.alpha = 1.0#, requires_grad=True, device=self.device)#0.2
         self.update_target(1)
 
     def select_actions(self, state):    
@@ -67,12 +72,11 @@ class SoftActorCriticAgent():
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
 
         current_q_1 = self.critic_q_1(states, actions)
-        current_q_2 = self.critic_q_2(states, actions)
-        
+        current_q_2 = self.critic_q_2(states, actions)        
 
         next_mean, next_variance, next_z, next_log_pi = self.actor.sample(next_states)
         next_policy_actions = torch.tanh(next_z)
-        next_q = min(self.critic_q_1_target(next_states, next_policy_actions), self.critic_q_2_target(next_states, next_policy_actions))
+        next_q = torch.min(self.critic_q_1_target(next_states, next_policy_actions), self.critic_q_2_target(next_states, next_policy_actions))
         next_q = next_q - self.alpha * next_log_pi
         target_q = rewards * self.reward_scale + (self.gamma * next_q * (1-dones)) 
         q1_loss = F.mse_loss(current_q_1, target_q.detach()) 
@@ -89,11 +93,23 @@ class SoftActorCriticAgent():
         q1 = self.critic_q_1(states, policy_actions)
         q2 = self.critic_q_2(states, policy_actions)
         predicted_new_q = torch.min(q1, q2)
-
         actor_loss = (self.alpha * log_prob - predicted_new_q).mean()
         self.actor_optim.zero_grad()
         actor_loss.backward()
         self.actor_optim.step()
+
+        # alpha_loss = (-self.alpha * (log_prob2 - self.expected_entropy).detach()).mean()
+        # print(alpha_loss)
+        # self.alpha_optimizer.zero_grad()
+        # alpha_loss.backward()
+        # self.alpha_optimizer.step()        
+        #alpha_loss2 = -1.0 * (self.alpha * (log_prob + self.expected_entropy).detach()).mean()
+        #print(alpha_loss2)
+        alpha_loss3 = (self.log_alpha * (-log_prob - self.expected_entropy).detach()).mean()        
+        self.alpha_optimizer.zero_grad()
+        alpha_loss3.backward()
+        self.alpha_optimizer.step() 
+        self.alpha = self.log_alpha.exp()
         self.update_target(self.tau)
 
     def update_target(self, tau):

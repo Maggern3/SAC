@@ -12,7 +12,7 @@ env = ObstacleTowerEnv(retro=False, realtime_mode=False)
 print(env.action_space)
 print(env.observation_space)
 
-agent = SoftActorCriticAgent()
+agent = SoftActorCriticAgent(env.action_space)
 
 state = env.reset()
 state = state[0]
@@ -39,9 +39,11 @@ for episode in range(400):
             break
     scores.append(rewards)
     mean_scores_100.append(rewards)
-    print('episode {} frames {} rewards {:.2f} mean score {:.2f} elapsed {:.2f}sec'.format(episode, timesteps, rewards, np.mean(mean_scores_100), time.time()-start))
+    print('log', agent.log_alpha)
+    print('episode {} frames {} rewards {:.2f} mean score {:.2f} alpha {} elapsed {:.2f}sec'.format(episode, timesteps, rewards, np.mean(mean_scores_100), agent.alpha, time.time()-start))
     if(episode % 20 == 0):
-        torch.save(agent.critic_v.state_dict(), 'checkpoints/critic_v_checkpoint_{}.pth'.format(version))
+        torch.save(agent.alpha, 'checkpoints/alpha{}.pth'.format(version))
+        torch.save(agent.log_alpha, 'checkpoints/log_alpha{}.pth'.format(version))
         torch.save(agent.critic_q_1.state_dict(), 'checkpoints/critic_q_1_checkpoint_{}.pth'.format(version))
         torch.save(agent.critic_q_2.state_dict(), 'checkpoints/critic_q_2_checkpoint_{}.pth'.format(version))
         torch.save(agent.actor.state_dict(), 'checkpoints/actor_checkpoint_{}.pth'.format(version))
@@ -86,3 +88,4 @@ plt.savefig('results/{}_scores.png'.format(version))
 # v9 v8 + random seed set
 
 # v11 removed seed, one CNN for each, remove detaching
+# sac2019
