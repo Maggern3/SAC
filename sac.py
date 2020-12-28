@@ -38,7 +38,7 @@ class SoftActorCriticAgent():
         print(self.expected_entropy)
         self.log_alpha = torch.tensor(0.0, requires_grad=True, device=self.device)
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=0.003)
-        self.alpha = 1.0#, requires_grad=True, device=self.device)#0.2
+        self.alpha = 0.2#, requires_grad=True, device=self.device)#0.2
         self.update_target(1)
 
     def select_actions(self, state):    
@@ -98,18 +98,19 @@ class SoftActorCriticAgent():
         actor_loss.backward()
         self.actor_optim.step()
 
-        # alpha_loss = (-self.alpha * (log_prob2 - self.expected_entropy).detach()).mean()
-        # print(alpha_loss)
-        # self.alpha_optimizer.zero_grad()
-        # alpha_loss.backward()
-        # self.alpha_optimizer.step()        
+        # my impl based on formula 18 from paper, crashes
+        #alpha_loss = (-self.alpha * (log_prob - self.expected_entropy).detach()).mean()
+        # rail-berkeley/softlearning, crashes
         #alpha_loss2 = -1.0 * (self.alpha * (log_prob + self.expected_entropy).detach()).mean()
-        #print(alpha_loss2)
-        alpha_loss3 = (self.log_alpha * (-log_prob - self.expected_entropy).detach()).mean()        
-        self.alpha_optimizer.zero_grad()
-        alpha_loss3.backward()
-        self.alpha_optimizer.step() 
+        # cyoon1729/Policy-Gradient-Methods, alpha is less than 0.0 in 80 episodes
+        #alpha_loss3 = (self.log_alpha * (-log_prob - self.expected_entropy).detach()).mean()    
+        # vitchyr/rlkit, alpha is less than 0.0 in 52 episodes
+        alpha_loss4 = -(self.log_alpha * (log_prob + self.expected_entropy).detach()).mean()
         self.alpha = self.log_alpha.exp()
+        self.alpha_optimizer.zero_grad()
+        alpha_loss4.backward()
+        self.alpha_optimizer.step() 
+        
         self.update_target(self.tau)
 
     def update_target(self, tau):
