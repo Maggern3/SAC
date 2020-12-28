@@ -28,6 +28,7 @@ for episode in range(400):
     for steps in range(10000):
         timesteps += 1
         actions, actions_env_format = agent.select_actions(state)
+        print(actions)
         next_state, reward, done, info = env.step(actions_env_format)
         next_state = next_state[0]
         next_state = TF.to_tensor(next_state)
@@ -89,3 +90,11 @@ plt.savefig('results/{}_scores.png'.format(version))
 
 # v11 removed seed, one CNN for each, remove detaching
 # sac2019
+
+
+#sac discrete
+# multiply with action probabilites and sum in dim1 for losses
+# target entropy -np.log((1.0 / self.action_size)) * 0.98
+
+# categorical might need exp
+# gather might need 4, one for each action dim

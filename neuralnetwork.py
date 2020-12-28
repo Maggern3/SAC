@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.distributions import Normal
+from torch.distributions import Categorical
 
 convoutputsize = 1296 
 initial_weight = 3e-3
@@ -28,16 +28,16 @@ class ActionValueNetwork(nn.Module):
     def __init__(self):    
         super().__init__()#NeuralNetwork, self
         self.conv_net = ConvNetwork()#.to(self.device)
-        self.fc1 = nn.Linear(convoutputsize+11, 256)
+        self.fc1 = nn.Linear(convoutputsize, 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
+        self.fc3 = nn.Linear(256, 11)
         # uniform init layer 3
         self.fc3.weight.data.uniform_(-initial_weight, initial_weight)
         self.fc3.bias.data.uniform_(-initial_weight, initial_weight)
 
-    def forward(self, state, action):
+    def forward(self, state):
         x = self.conv_net(state)
-        x = F.relu(self.fc1(torch.cat((x, action), dim=1)))
+        x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
@@ -47,30 +47,26 @@ class PolicyNetwork(nn.Module):
         super().__init__()#NeuralNetwork, self
         self.conv_net = ConvNetwork()#.to(self.device)
         self.fc1 = nn.Linear(convoutputsize, 256)
-        self.fc2 = nn.Linear(256, 256)
+        self.fc2 = nn.Linear(256, 11)
 
-        self.mean_fc = nn.Linear(256, 11)
-        self.mean_fc.weight.data.uniform_(-initial_weight, initial_weight)
-        self.mean_fc.bias.data.uniform_(-initial_weight, initial_weight)
-        self.log_variance_fc = nn.Linear(256, 11)
-        self.log_variance_fc.weight.data.uniform_(-initial_weight, initial_weight)
-        self.log_variance_fc.bias.data.uniform_(-initial_weight, initial_weight)
+        self.fc2.weight.data.uniform_(-initial_weight, initial_weight)
+        self.fc2.bias.data.uniform_(-initial_weight, initial_weight)
         # mean, variance, normal distribution
 
     def forward(self, state):
         x = self.conv_net(state)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        mean = self.mean_fc(x)
-        log_variance = self.log_variance_fc(x)
-        log_variance = torch.clamp(log_variance, -20, 2)
-        return mean, log_variance
-
-    def sample(self, state, epsilon=1e-6):
-        mean, log_variance = self.forward(state)
-        variance = log_variance.exp()
-        gaussian = Normal(mean, variance)        
-        z = gaussian.sample()
-        
-        log_pi = (gaussian.log_prob(z) - torch.log(1 - (torch.tanh(z)).pow(2) + epsilon)).sum(1, keepdim=True)
-        return mean, variance, z, log_pi
+        #log_prob = F.log_softmax(x)
+        #dim1 = actions[0:3]
+        dim1_p = F.log_softmax(x[:,0:3], dim=1)
+        action1 = Categorical(dim1_p).sample()
+        dim2_p = F.log_softmax(x[:,3:6], dim=1)
+        action2 = Categorical(dim2_p).sample()
+        dim3_p = F.log_softmax(x[:,6:8], dim=1)
+        action3 = Categorical(dim3_p).sample()
+        dim4_p = F.log_softmax(x[:,8:11], dim=1)
+        action4 = Categorical(dim4_p).sample()
+        actions_env_format = [action1.item(), action2.item(), action3.item(), action4.item()]
+        log_prob = torch.cat((dim1_p, dim2_p, dim3_p, dim4_p), dim=1)
+        return log_prob, actions_env_format
