@@ -93,7 +93,7 @@ plt.savefig('results/{}_scores.png'.format(version))
 
 
 #sac discrete
-# multiply with action probabilites and sum in dim1 for losses
+# q_loss multiply with action probabilites and add sum in dim1 for losses
 # target entropy -np.log((1.0 / self.action_size)) * 0.98
 
 # categorical might need exp

@@ -67,6 +67,6 @@ class PolicyNetwork(nn.Module):
         action3 = Categorical(dim3_p).sample()
         dim4_p = F.log_softmax(x[:,8:11], dim=1)
         action4 = Categorical(dim4_p).sample()
-        actions_env_format = [action1.item(), action2.item(), action3.item(), action4.item()]
+        actions_env_format = [action1, action2, action3, action4]
         log_prob = torch.cat((dim1_p, dim2_p, dim3_p, dim4_p), dim=1)
         return log_prob, actions_env_format

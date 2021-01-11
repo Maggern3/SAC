@@ -37,14 +37,16 @@ class SoftActorCriticAgent():
         self.expected_entropy = -torch.prod(torch.tensor(action_space.shape).to(self.device)).item() # unsure if this is right for multidiscrete env
         print('target entropy', self.expected_entropy)
         self.log_alpha = torch.tensor(0.0, requires_grad=True, device=self.device)
+        self.alpha = self.log_alpha.exp() #0.2#, requires_grad=True, device=self.device)#0.2
         self.alpha_optimizer = optim.Adam([self.log_alpha], lr=0.003)
-        self.alpha = 0.2#, requires_grad=True, device=self.device)#0.2
+
         self.update_target(1)
 
     def select_actions(self, state):    
         self.actor.eval()
         with torch.no_grad():    
-            log_prob, actions_env_format = self.actor(state.unsqueeze(0).to(self.device))
+            log_prob, actions = self.actor(state.unsqueeze(0).to(self.device))
+            actions_env_format = [actions[0].item(), actions[1].item(), actions[2].item(), actions[3].item()]
             #actions = actions.cpu().detach().squeeze(0)            
         self.actor.train()
         return actions_env_format, numpy.array(actions_env_format)
@@ -59,7 +61,7 @@ class SoftActorCriticAgent():
         current_q_2 = self.critic_q_2(states)
         q2_w_actions = current_q_2.gather(1, actions)        
 
-        next_log_pi = self.actor(next_states)        
+        next_log_pi, next_actions = self.actor(next_states)        
         next_q = torch.min(self.critic_q_1_target(next_states), self.critic_q_2_target(next_states))
         next_q = next_q - self.alpha * next_log_pi
         target_q = rewards + (self.gamma * next_q * (1-dones)) 
