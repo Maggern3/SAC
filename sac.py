@@ -45,7 +45,7 @@ class SoftActorCriticAgent():
     def select_actions(self, state):    
         self.actor.eval()
         with torch.no_grad():    
-            log_prob, actions = self.actor(state.unsqueeze(0).to(self.device))
+            log_prob, actions, actions_batch_format = self.actor(state.unsqueeze(0).to(self.device))
             actions_env_format = [actions[0].item(), actions[1].item(), actions[2].item(), actions[3].item()]
             #actions = actions.cpu().detach().squeeze(0)            
         self.actor.train()
@@ -56,14 +56,22 @@ class SoftActorCriticAgent():
             return  
         states, actions, rewards, next_states, dones = self.replay_buffer.sample()
 
+        # get the values of the chosen actions in the states
         current_q_1 = self.critic_q_1(states)
-        q1_w_actions = current_q_1.gather(1, actions)
+        q1_w_actions = self.critic_q_1.getActionValuesForActions(current_q_1, actions)
         current_q_2 = self.critic_q_2(states)
-        q2_w_actions = current_q_2.gather(1, actions)        
+        q2_w_actions = self.critic_q_2.getActionValuesForActions(current_q_2, actions)        
 
-        next_log_pi, next_actions = self.actor(next_states)        
-        next_q = torch.min(self.critic_q_1_target(next_states), self.critic_q_2_target(next_states))
-        next_q = next_q - self.alpha * next_log_pi
+        next_log_prob_selected_actions, next_actions, next_actions_batch_format = self.actor(next_states)   
+        # ddpg and original sac 19 uses next_actions to get the q_values 
+        q1 = self.critic_q_1_target(next_states)    
+        q2 = self.critic_q_2_target(next_states)
+        next_q1_4s = self.critic_q_1_target.getActionValuesForActions(q1, next_actions_batch_format)
+        next_q2_4s = self.critic_q_2_target.getActionValuesForActions(q2, next_actions_batch_format)
+        next_q = torch.min(next_q1_4s, next_q2_4s)
+        #next_q = torch.min(q1, q2)
+        next_q = next_q - self.alpha * next_log_prob_selected_actions
+        #next_q = torch.sum(next_q, dim=1).unsqueeze(-1)
         target_q = rewards + (self.gamma * next_q * (1-dones)) 
 
         q1_loss = F.mse_loss(q1_w_actions, target_q.detach()) 
@@ -75,10 +83,14 @@ class SoftActorCriticAgent():
         q2_loss.backward()
         self.q2_optim.step()
 
-        log_prob, actions_env_format = self.actor(states)
+        next_log_prob_selected_actions, actions_env_format, actions_batch_format = self.actor(states)
         
-        predicted_new_q = torch.min(current_q_1, current_q_2)
-        actor_loss = (self.alpha * log_prob - predicted_new_q).mean()
+        current_q_1 = self.critic_q_1(states)
+        q1_w_actions = self.critic_q_1.getActionValuesForActions(current_q_1, actions)
+        current_q_2 = self.critic_q_2(states)
+        q2_w_actions = self.critic_q_2.getActionValuesForActions(current_q_2, actions)
+        predicted_new_q = torch.min(q1_w_actions, q2_w_actions)        
+        actor_loss = (self.alpha * next_log_prob_selected_actions - predicted_new_q).mean()
         self.actor_optim.zero_grad()
         actor_loss.backward()
         self.actor_optim.step()
@@ -91,7 +103,7 @@ class SoftActorCriticAgent():
         #alpha_loss3 = (self.log_alpha * (-log_prob - self.expected_entropy).detach()).mean()    
         # vitchyr/rlkit, alpha is less than 0.0 in 52 episodes
         # p-christ/Deep-Reinforcement-Learning-Algorithms-with-PyTorch
-        alpha_loss4 = -(self.log_alpha * (log_prob + self.expected_entropy).detach()).mean()
+        alpha_loss4 = -(self.log_alpha * (next_log_prob_selected_actions + self.expected_entropy).detach()).mean()
         self.alpha = self.log_alpha.exp()
         self.alpha_optimizer.zero_grad()
         alpha_loss4.backward()

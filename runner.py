@@ -28,7 +28,7 @@ for episode in range(400):
     for steps in range(10000):
         timesteps += 1
         actions, actions_env_format = agent.select_actions(state)
-        print(actions)
+        #print(actions)
         next_state, reward, done, info = env.step(actions_env_format)
         next_state = next_state[0]
         next_state = TF.to_tensor(next_state)
